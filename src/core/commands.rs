@@ -1,8 +1,7 @@
+use regex::Regex;
 use std::{num::ParseFloatError, str::FromStr};
 
-use crate::units::{Unit, Value};
-
-use regex::Regex;
+use crate::core::units::{Unit, Value};
 
 pub enum Command {
     CONVERT(Value, Unit),

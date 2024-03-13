@@ -113,8 +113,8 @@ trait Unitlike:
     fn get_display_map() -> HashMap<(&'static str, &'static str), Self>;
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let display_map = Self::get_display_map();
-        let (long, _) = display_map.iter().find(|(_, &v)| v == *self).unwrap().0;
-        write!(f, "{}", long)
+        let (long, short) = display_map.iter().find(|(_, &v)| v == *self).unwrap().0;
+        write!(f, "{} ({})", long, short)
     }
 
     fn from_str(s: &str) -> Result<Self, String> {
