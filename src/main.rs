@@ -1,11 +1,8 @@
-use std::num::ParseFloatError;
 use console::Term;
 use dialoguer::Input;
-use regex::Regex;
 
-mod units;
 mod commands;
-use crate::units::*;
+mod units;
 use crate::commands::Command;
 
 /* Feature ideas:
@@ -23,12 +20,11 @@ use crate::commands::Command;
 
 fn main() {
     let term = Term::stdout();
-    term.write_line("Enter a conversion expression (e.g. 100 m -> km) or 'exit' to exit.").unwrap();
-    
+    term.write_line("Enter a conversion expression (e.g. 100 m -> km) or 'exit' to exit.")
+        .unwrap();
+
     loop {
-        let input: String = Input::new()
-            .interact()
-            .unwrap();
+        let input: String = Input::new().interact().unwrap();
 
         let command: Result<Command, _> = input.trim().parse();
         match command {

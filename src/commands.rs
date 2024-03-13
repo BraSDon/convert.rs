@@ -1,6 +1,6 @@
 use std::{num::ParseFloatError, str::FromStr};
 
-use crate::units::{Value, Unit};
+use crate::units::{Unit, Value};
 
 use regex::Regex;
 
@@ -23,14 +23,14 @@ impl Command {
                     Ok(v) => output.push_str(&format!("{}", v)),
                     Err(e) => output.push_str(&format!("{}", e)),
                 }
-            },
+            }
             Command::UNITS => {
                 output.push_str("Available units:\n");
                 let units = Unit::get_all_units();
                 for unit in units {
                     output.push_str(&format!("{}\n", unit));
                 }
-            },
+            }
             Command::HELP => output.push_str("HEEEEELP!"),
             _ => {}
         };
@@ -47,14 +47,18 @@ impl Command {
 
         match re.captures(s) {
             Some(caps) => {
-                let value: f64 = caps[1].parse().map_err(|e: ParseFloatError| e.to_string())?;
+                let value: f64 = caps[1]
+                    .parse()
+                    .map_err(|e: ParseFloatError| e.to_string())?;
                 let from_unit = caps[2].parse()?;
                 let to_unit = caps[3].parse()?;
 
                 let v = Value::new(value, from_unit);
                 Ok(Command::CONVERT(v, to_unit))
-            },
-            None => Err(format!("Invalid input. Expression should be in the form <value> <unit> -> <unit>."))
+            }
+            None => Err(format!(
+                "Invalid input. Expression should be in the form <value> <unit> -> <unit>."
+            )),
         }
     }
 }

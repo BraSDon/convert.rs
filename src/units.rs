@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::{default, mem};
 use std::str::FromStr;
+use std::{default, mem};
 
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -9,14 +9,14 @@ use strum_macros::EnumIter;
 #[derive(Debug, PartialEq)]
 pub struct Value {
     value: Option<f64>,
-    unit: Unit
+    unit: Unit,
 }
 
 impl Value {
     pub fn new(value: f64, unit: Unit) -> Value {
         Value {
             value: Some(value),
-            unit
+            unit,
         }
     }
 
@@ -61,12 +61,12 @@ impl Unit {
     }
 
     pub fn get_all_units() -> Vec<Unit> {
-        Unit::iter().flat_map(|unit| {
-            match unit {
+        Unit::iter()
+            .flat_map(|unit| match unit {
                 Unit::Length(_) => LengthUnit::iter().map(Unit::Length).collect::<Vec<Unit>>(),
                 Unit::Mass(_) => MassUnit::iter().map(Unit::Mass).collect::<Vec<Unit>>(),
-            }
-        }).collect()
+            })
+            .collect()
     }
 }
 
@@ -107,24 +107,23 @@ trait Convertable {
     }
 }
 
-// trait Unitlike: Display + PartialEq + Convertable + FromStr + default::Default + IntoEnumIterator {
-//     fn get_display_map() -> HashMap<(&'static str, &'static str), Self>;
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         let display_map = Self::get_display_map();
-//         let (long, _) = display_map.iter().find(|(_, &v)| v == *self).unwrap().0;
-//         write!(f, "{}", long)
-//     }
+trait Unitlike:
+    Display + PartialEq + Convertable + FromStr + default::Default + IntoEnumIterator + Clone + Copy
+{
+    fn get_display_map() -> HashMap<(&'static str, &'static str), Self>;
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let display_map = Self::get_display_map();
+        let (long, _) = display_map.iter().find(|(_, &v)| v == *self).unwrap().0;
+        write!(f, "{}", long)
+    }
 
-//     fn from_str(s: &str) -> Result<Self, String> {
-//         Self::get_display_map().iter()
-//             .find(|&((long, short), _)| s == *long || s == *short)
-//             .map(|(_, &unit)| unit)
-//             .ok_or_else(|| format!("Invalid unit: {}", s))
-//     }
-// }
-
-trait DisplayMap {
-    fn get_display_map() -> HashMap<(&'static str, &'static str), Self> where Self: Sized;
+    fn from_str(s: &str) -> Result<Self, String> {
+        Self::get_display_map()
+            .iter()
+            .find(|&((long, short), _)| s == *long || s == *short)
+            .map(|(_, &unit)| unit)
+            .ok_or_else(|| format!("Invalid unit: {}", s))
+    }
 }
 
 #[derive(Debug, PartialEq, Clone, Copy, EnumIter, Default)]
@@ -138,7 +137,7 @@ pub enum LengthUnit {
     Inch,
 }
 
-impl DisplayMap for LengthUnit {
+impl Unitlike for LengthUnit {
     fn get_display_map() -> HashMap<(&'static str, &'static str), LengthUnit> {
         let mut m = HashMap::new();
         m.insert(("meter", "m"), LengthUnit::Meter);
@@ -153,9 +152,7 @@ impl DisplayMap for LengthUnit {
 
 impl Display for LengthUnit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let display_map = LengthUnit::get_display_map();
-        let (long, _) = display_map.iter().find(|(_, &v)| v == *self).unwrap().0;
-        write!(f, "{}", long)
+        Unitlike::fmt(self, f)
     }
 }
 
@@ -163,10 +160,7 @@ impl FromStr for LengthUnit {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        LengthUnit::get_display_map().iter()
-            .find(|&((long, short), _)| s == *long || s == *short)
-            .map(|(_, &unit)| unit)
-            .ok_or_else(|| format!("Invalid length unit: {}", s))
+        Unitlike::from_str(s)
     }
 }
 
@@ -197,7 +191,7 @@ pub enum MassUnit {
     Ounce,
 }
 
-impl DisplayMap for MassUnit {
+impl Unitlike for MassUnit {
     fn get_display_map() -> HashMap<(&'static str, &'static str), MassUnit> {
         let mut m = HashMap::new();
         m.insert(("kilogram", "kg"), MassUnit::Kilogram);
@@ -211,13 +205,7 @@ impl DisplayMap for MassUnit {
 
 impl Display for MassUnit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MassUnit::Kilogram => write!(f, "kilogram"),
-            MassUnit::Gram => write!(f, "gram"),
-            MassUnit::Ton => write!(f, "ton"),
-            MassUnit::Pound => write!(f, "pound"),
-            MassUnit::Ounce => write!(f, "ounce"),
-        }
+        Unitlike::fmt(self, f)
     }
 }
 
@@ -225,14 +213,7 @@ impl FromStr for MassUnit {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "kg" | "kilogram" => Ok(MassUnit::Kilogram),
-            "g"  | "gram" => Ok(MassUnit::Gram),
-            "t"  | "ton" => Ok(MassUnit::Ton),
-            "lb" | "pound" => Ok(MassUnit::Pound),
-            "oz" | "ounce" => Ok(MassUnit::Ounce),
-            _ => Err(format!("Invalid mass unit: {}", s)),
-        }
+        Unitlike::from_str(s)
     }
 }
 
@@ -310,4 +291,3 @@ mod tests {
         assert_eq!(v2, Value::new(1000.0, Unit::Mass(MassUnit::Gram)));
     }
 }
-
