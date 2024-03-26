@@ -7,6 +7,19 @@ use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 #[derive(Debug, PartialEq)]
+pub struct ConversionError {
+    message: String,
+}
+
+impl Display for ConversionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Conversion error: {}", self.message)
+    }
+}
+
+type ConversionResult<T> = Result<T, ConversionError>;
+
+#[derive(Debug, PartialEq)]
 pub struct Value {
     value: Option<f64>,
     unit: Unit,
@@ -20,15 +33,13 @@ impl Value {
         }
     }
 
-    pub fn convert_to(&self, to: &Unit) -> Result<Value, String> {
-        if let None = self.value {
-            return Err("Value is None".to_string());
-        }
+    pub fn convert_to(&self, to: &Unit) -> ConversionResult<Value> {
+        self.value.ok_or(ConversionError { message: "Value is None".to_string() })?;
         if self.unit != *to {
-            return Err(format!("Cannot convert from {} to {}", self.unit, to));
+            return Err(ConversionError { message: format!("Cannot convert from {} to {}", self.unit, to) });
         }
-
-        let new_value = Unit::convert(self.value.unwrap(), &self.unit, to);
+        
+        let new_value = Unit::convert(self.value.unwrap(), &self.unit, to)?;
         Ok(Value {
             value: Some(new_value),
             unit: to.clone(),
@@ -49,14 +60,18 @@ impl Display for Value {
 pub enum Unit {
     Length(LengthUnit),
     Mass(MassUnit),
+    Currency(CurrencyUnit),
 }
 
 impl Unit {
-    fn convert(value: f64, from: &Unit, to: &Unit) -> f64 {
+    fn convert(value: f64, from: &Unit, to: &Unit) -> ConversionResult<f64> {
         match (from, to) {
             (Unit::Length(from), Unit::Length(to)) => LengthUnit::convert(value, from, to),
             (Unit::Mass(from), Unit::Mass(to)) => MassUnit::convert(value, from, to),
-            _ => panic!("Cannot convert from {} to {}", from, to),
+            (Unit::Currency(from), Unit::Currency(to)) => CurrencyUnit::convert(value, from, to),
+            _ => Err(ConversionError {
+                message: format!("Cannot convert from {} to {}", from, to),
+            }),
         }
     }
 
@@ -65,6 +80,7 @@ impl Unit {
             .flat_map(|unit| match unit {
                 Unit::Length(_) => LengthUnit::iter().map(Unit::Length).collect::<Vec<Unit>>(),
                 Unit::Mass(_) => MassUnit::iter().map(Unit::Mass).collect::<Vec<Unit>>(),
+                Unit::Currency(_) => CurrencyUnit::iter().map(Unit::Currency).collect::<Vec<Unit>>(),
             })
             .collect()
     }
@@ -81,6 +97,7 @@ impl Display for Unit {
         match self {
             Unit::Length(u) => write!(f, "{}", u),
             Unit::Mass(u) => write!(f, "{}", u),
+            Unit::Currency(u) => write!(f, "{}", u),
         }
     }
 }
@@ -95,15 +112,22 @@ impl FromStr for Unit {
         if let Ok(mass_unit) = s.parse::<MassUnit>() {
             return Ok(Unit::Mass(mass_unit));
         }
+        if let Ok(currency_unit) = s.parse::<CurrencyUnit>() {
+            return Ok(Unit::Currency(currency_unit));
+        }
         Err(format!("Invalid unit: {}", s))
     }
 }
 
 trait Convertable {
-    fn from_base_unit(&self, value: f64) -> f64;
-    fn to_base_unit(&self, value: f64) -> f64;
-    fn convert(value: f64, from: &Self, to: &Self) -> f64 {
-        to.from_base_unit(from.to_base_unit(value))
+    fn to_base_unit(&self, value: f64) -> ConversionResult<f64>;
+    fn from_base_unit(&self, value: f64) -> ConversionResult<f64> {
+        let base_value = self.to_base_unit(1.0)?;
+        Ok(value / base_value)
+    }
+    fn convert(value: f64, from: &Self, to: &Self) -> ConversionResult<f64> {
+        let base_value = from.to_base_unit(value)?;
+        to.from_base_unit(base_value)
     }
 }
 
@@ -165,19 +189,16 @@ impl FromStr for LengthUnit {
 }
 
 impl Convertable for LengthUnit {
-    fn to_base_unit(&self, value: f64) -> f64 {
-        match self {
+    fn to_base_unit(&self, value: f64) -> ConversionResult<f64> {
+        let val = match self {
             LengthUnit::Meter => value,
             LengthUnit::Centimeter => value / 100.0,
             LengthUnit::Kilometer => value * 1000.0,
             LengthUnit::Yard => value * 0.9144,
             LengthUnit::Foot => value * 0.3048,
             LengthUnit::Inch => value * 0.0254,
-        }
-    }
-
-    fn from_base_unit(&self, value: f64) -> f64 {
-        value / self.to_base_unit(1.0)
+        };
+        Ok(val)
     }
 }
 
@@ -218,18 +239,62 @@ impl FromStr for MassUnit {
 }
 
 impl Convertable for MassUnit {
-    fn to_base_unit(&self, value: f64) -> f64 {
-        match self {
+    fn to_base_unit(&self, value: f64) -> ConversionResult<f64> {
+        let val = match self {
             MassUnit::Kilogram => value,
             MassUnit::Gram => value / 1000.0,
             MassUnit::Ton => value * 1000.0,
             MassUnit::Pound => value * 0.453592,
             MassUnit::Ounce => value * 0.0283495,
-        }
+        };
+        Ok(val)
     }
+}
 
-    fn from_base_unit(&self, value: f64) -> f64 {
-        value / self.to_base_unit(1.0)
+#[derive(Debug, PartialEq, Clone, Copy, EnumIter, Default, Hash, Eq)]
+pub enum CurrencyUnit {
+    #[default]
+    USD,
+    EUR,
+    JPY,
+    KRW,
+    GBP,
+    AUD,
+}
+
+impl Unitlike for CurrencyUnit {
+    fn get_display_map() -> HashMap<(&'static str, &'static str), CurrencyUnit> {
+        let mut m = HashMap::new();
+        m.insert(("USD", "USD"), CurrencyUnit::USD);
+        m.insert(("EUR", "EUR"), CurrencyUnit::EUR);
+        m.insert(("JPY", "JPY"), CurrencyUnit::JPY);
+        m.insert(("KRW", "KRW"), CurrencyUnit::KRW);
+        m.insert(("GBP", "GBP"), CurrencyUnit::GBP);
+        m.insert(("AUD", "AUD"), CurrencyUnit::AUD);
+        m
+    }
+}
+
+impl Display for CurrencyUnit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let display_map = Self::get_display_map();
+        let (long, _) = display_map.iter().find(|(_, &v)| v == *self).unwrap().0;
+        write!(f, "{}", long)
+    }
+}
+
+impl FromStr for CurrencyUnit {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Unitlike::from_str(s)
+    }
+}
+
+impl Convertable for CurrencyUnit {
+    fn to_base_unit(&self, value: f64) -> ConversionResult<f64> {
+        // TODO: implement conversion. Who is responsible for creating and owning the conversion cache?
+        Ok(value)
     }
 }
 

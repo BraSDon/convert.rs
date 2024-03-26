@@ -3,24 +3,31 @@ use std::{num::ParseFloatError, str::FromStr};
 
 use crate::core::units::{Unit, Value};
 
+/// Command enum to represent the different commands the user can input.
+#[derive(Debug, PartialEq)]
 pub enum Command {
+    /// Convert a value to another unit.
     CONVERT(Value, Unit),
+    /// List all available units.
     UNITS,
+    /// Show help.
     HELP,
+    /// Exit the program.
     EXIT,
 }
 
 impl Command {
+    /// Execute the command and return the output as a string.
+    /// String output is chosen to support different UIs.
     pub fn execute(&self) -> String {
-        // String builder for the output as I might have clui and web output
         let mut output = String::new();
 
         match self {
             Command::CONVERT(value, to_unit) => {
                 let result = value.convert_to(to_unit);
                 match result {
-                    Ok(v) => output.push_str(&format!("{}", v)),
-                    Err(e) => output.push_str(&format!("{}", e)),
+                    Ok(v) => output.push_str(&v.to_string()),
+                    Err(e) => output.push_str(&e.to_string()),
                 }
             }
             Command::UNITS => {
@@ -39,6 +46,7 @@ impl Command {
 }
 
 impl Command {
+    /// Try parsing a conversion command from a string.
     fn try_parse_conversion(s: &str) -> Result<Command, String> {
         // define regex pattern (<value> <unit> -> <unit>)
         let pattern = r"(\d+(?:\.\d+)?)\s(.+)\s->\s(.+)";
@@ -75,5 +83,37 @@ impl FromStr for Command {
             "exit" => Ok(Command::EXIT),
             _ => conversion_result,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::core::units::LengthUnit;
+
+    use super::*;
+
+    #[test]
+    fn test_command_from_str() {
+        let command = "100 m -> km".parse::<Command>();
+        assert!(command.is_ok());
+        assert_eq!(
+            command.unwrap(),
+            Command::CONVERT(Value::new(100.0, Unit::Length(LengthUnit::Meter)), Unit::Length(LengthUnit::Kilometer))
+        );
+
+        let command = "units".parse::<Command>();
+        assert!(command.is_ok());
+        assert_eq!(command.unwrap(), Command::UNITS);
+
+        let command = "help".parse::<Command>();
+        assert!(command.is_ok());
+        assert_eq!(command.unwrap(), Command::HELP);
+
+        let command = "exit".parse::<Command>();
+        assert!(command.is_ok());
+        assert_eq!(command.unwrap(), Command::EXIT);
+
+        let command = "invalid".parse::<Command>();
+        assert!(command.is_err());
     }
 }
