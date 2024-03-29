@@ -98,7 +98,10 @@ mod tests {
         assert!(command.is_ok());
         assert_eq!(
             command.unwrap(),
-            Command::CONVERT(Value::new(100.0, Unit::Length(LengthUnit::Meter)), Unit::Length(LengthUnit::Kilometer))
+            Command::CONVERT(
+                Value::new(100.0, Unit::Length(LengthUnit::Meter)),
+                Unit::Length(LengthUnit::Kilometer)
+            )
         );
 
         let command = "units".parse::<Command>();

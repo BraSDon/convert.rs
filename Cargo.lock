@@ -1245,6 +1245,7 @@ dependencies = [
  "clap",
  "console",
  "dialoguer",
+ "once_cell",
  "regex",
  "reqwest",
  "serde_json",

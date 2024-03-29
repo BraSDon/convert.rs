@@ -1,10 +1,16 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::str::FromStr;
+use std::sync::Mutex;
 use std::{default, mem};
 
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
+
+use super::currency::ConversionCache;
+use once_cell::sync::Lazy;
+
+static CACHE: Lazy<Mutex<ConversionCache>> = Lazy::new(|| Mutex::new(ConversionCache::new()));
 
 #[derive(Debug, PartialEq)]
 pub struct ConversionError {
@@ -34,11 +40,15 @@ impl Value {
     }
 
     pub fn convert_to(&self, to: &Unit) -> ConversionResult<Value> {
-        self.value.ok_or(ConversionError { message: "Value is None".to_string() })?;
+        self.value.ok_or(ConversionError {
+            message: "Value is None".to_string(),
+        })?;
         if self.unit != *to {
-            return Err(ConversionError { message: format!("Cannot convert from {} to {}", self.unit, to) });
+            return Err(ConversionError {
+                message: format!("Cannot convert from {} to {}", self.unit, to),
+            });
         }
-        
+
         let new_value = Unit::convert(self.value.unwrap(), &self.unit, to)?;
         Ok(Value {
             value: Some(new_value),
@@ -80,7 +90,9 @@ impl Unit {
             .flat_map(|unit| match unit {
                 Unit::Length(_) => LengthUnit::iter().map(Unit::Length).collect::<Vec<Unit>>(),
                 Unit::Mass(_) => MassUnit::iter().map(Unit::Mass).collect::<Vec<Unit>>(),
-                Unit::Currency(_) => CurrencyUnit::iter().map(Unit::Currency).collect::<Vec<Unit>>(),
+                Unit::Currency(_) => CurrencyUnit::iter()
+                    .map(Unit::Currency)
+                    .collect::<Vec<Unit>>(),
             })
             .collect()
     }
@@ -293,8 +305,14 @@ impl FromStr for CurrencyUnit {
 
 impl Convertable for CurrencyUnit {
     fn to_base_unit(&self, value: f64) -> ConversionResult<f64> {
-        // TODO: implement conversion. Who is responsible for creating and owning the conversion cache?
-        Ok(value)
+        CACHE
+            .lock()
+            .unwrap()
+            .get_base_rate(*self)
+            .map(|rate| value / rate)
+            .map_err(|e| ConversionError {
+                message: e.to_string(),
+            })
     }
 }
 
