@@ -1,15 +1,12 @@
-/*
-TODO:
-- Persist conversion rates using a lightweight database
-*/
-
 use super::units::CurrencyUnit;
 use chrono::{DateTime, TimeDelta, Utc};
 use reqwest;
+use rusqlite::{Connection, Result};
 use serde_json::Value;
 use std::{collections::HashMap, fmt::Display};
 
 const API_BASE_URL: &str = "https://openexchangerates.org/api/latest.json";
+const EXPIRE_AFTER: i64 = 60 * 60 * 24 * 7; // 1 week
 
 pub struct ConversionCache {
     /// Map from starting currency to base currency (USD) and timestamp of last update
@@ -19,13 +16,22 @@ pub struct ConversionCache {
     last_time: Option<DateTime<Utc>>,
 }
 
+impl Default for ConversionCache {
+    fn default() -> Self {
+        ConversionCache {
+            cache: HashMap::new(),
+            expire_after: TimeDelta::new(EXPIRE_AFTER, 0).unwrap(),
+            last_time: None,
+        }
+    }
+}
+
 impl ConversionCache {
     /// Create a new ConversionCache with a given expiration time.
     pub fn new() -> Self {
-        ConversionCache {
-            cache: HashMap::new(),
-            expire_after: TimeDelta::new(3600, 0).unwrap(),
-            last_time: None,
+        match Self::load_from_db() {
+            Ok(cache) => cache,
+            Err(_) => Self::default(),
         }
     }
 
@@ -52,6 +58,7 @@ impl ConversionCache {
         })
     }
 
+    /// Request conversion rates from USD to all other currencies.
     fn request(&self) -> Result<Value, APIError> {
         let app_id = std::env::var("OPENEXCHANGERATES_APP_ID").map_err(|_| APIError {
             message: "API key not found".to_string(),
@@ -61,6 +68,8 @@ impl ConversionCache {
         Ok(body)
     }
 
+    /// Update the cache with the given response.
+    /// The response should be the JSON object returned by the specified API.
     fn update(&mut self, response: Value) -> Result<(), APIError> {
         let timestamp: DateTime<Utc> = response["timestamp"]
             .as_i64()
@@ -85,12 +94,69 @@ impl ConversionCache {
             };
         }
         self.last_time = Some(timestamp);
+        let _ = self.save_to_db();
         Ok(())
+    }
+
+    /// Save the cache to the database.
+    fn save_to_db(&self) -> Result<()> {
+        let conn = Connection::open("conversion_cache.db")?;
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS conversion_cache (
+                currency TEXT PRIMARY KEY,
+                rate REAL,
+                last_update TEXT
+            )",
+            [],
+        )?;
+
+        for (currency, rate) in self.cache.iter() {
+            conn.execute(
+                "INSERT OR REPLACE INTO conversion_cache (currency, rate, last_update)
+                VALUES (?, ?, ?)",
+                [
+                    currency.to_string(),
+                    rate.to_string(),
+                    self.last_time.unwrap().to_string(),
+                ],
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Load the cache from the database.
+    fn load_from_db() -> Result<Self, Box<dyn std::error::Error>> {
+        let conn = Connection::open("conversion_cache.db")?;
+        let mut stmt = conn.prepare("SELECT * FROM conversion_cache")?;
+        let rows = stmt.query_map([], |row| {
+            let currency: String = row.get(0)?;
+            let rate: f64 = row.get(1)?;
+            let last_update_str: String = row.get(2)?;
+
+            let currency_unit = currency.parse().expect("Invalid currency unit");
+            let last_update = last_update_str.parse().expect("Invalid timestamp");
+
+            Ok((currency_unit, rate, last_update))
+        })?;
+
+        let mut cache: HashMap<CurrencyUnit, f64> = HashMap::new();
+        let mut last_update = Utc::now(); // Initialize last_update with a default value
+        for row_result in rows {
+            let (currency, rate, last_update_from_row) = row_result?;
+            cache.insert(currency, rate);
+            last_update = last_update_from_row;
+        }
+        Ok(ConversionCache {
+            cache,
+            expire_after: TimeDelta::new(EXPIRE_AFTER, 0).unwrap(),
+            last_time: Some(last_update),
+        })
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct APIError {
+    /// Error type for API requests.
     message: String,
 }
 
