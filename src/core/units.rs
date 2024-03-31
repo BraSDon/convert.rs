@@ -368,9 +368,23 @@ mod tests {
     }
 
     #[test]
+    fn test_length_conversion_edge_case() {
+        let v = Value::new(0.0, Unit::Length(LengthUnit::Meter));
+        let v2 = v.convert_to(&Unit::Length(LengthUnit::Kilometer)).unwrap();
+        assert_eq!(v2, Value::new(0.0, Unit::Length(LengthUnit::Kilometer)));
+    }
+
+    #[test]
     fn test_mass_conversion() {
         let v = Value::new(1.0, Unit::Mass(MassUnit::Kilogram));
         let v2 = v.convert_to(&Unit::Mass(MassUnit::Gram)).unwrap();
         assert_eq!(v2, Value::new(1000.0, Unit::Mass(MassUnit::Gram)));
+    }
+
+    #[test]
+    fn test_currency_conversion() {
+        let v = Value::new(1.0, Unit::Currency(CurrencyUnit::USD));
+        let v2 = v.convert_to(&Unit::Currency(CurrencyUnit::EUR));
+        assert!(v2.is_ok());
     }
 }

@@ -176,17 +176,99 @@ impl From<reqwest::Error> for APIError {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Instant;
+
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn test_get_entry_multiple_times() {
         let mut cache = ConversionCache::new();
+        let start = Instant::now();
         let rate = cache.get_base_rate(CurrencyUnit::EUR);
+        let duration_fst = start.elapsed();
         assert!(rate.is_ok());
 
-        let rate_new = cache.get_base_rate(CurrencyUnit::EUR);
-        assert!(rate_new.is_ok());
-        assert!(rate.unwrap() == rate_new.unwrap());
-        // TODO: assert that request_and_update was NOT called
+        let repeat_count = 10;
+        let mut total_duration = std::time::Duration::new(0, 0);
+        for _ in 0..repeat_count {
+            let start = Instant::now();
+            let rate_new = cache.get_base_rate(CurrencyUnit::EUR);
+            total_duration += start.elapsed();
+            assert!(rate_new.is_ok());
+            assert!(rate.clone().unwrap() == rate_new.unwrap());
+        }
+
+        let average_duration = total_duration / repeat_count;
+        
+        // implicitly check that subsequent calls do not require a new API request,
+        // therefore should be faster than the first call.
+        assert!(duration_fst > average_duration);
+        
+    }
+
+    #[test]
+    fn test_update_with_valid_response() {
+        let mut cache = ConversionCache::new();
+        let response = json!({
+            "timestamp": Utc::now().timestamp(),
+            "rates": {
+                "EUR": 1.0,
+                "USD": 1.2
+            }
+        });
+        assert!(cache.update(response).is_ok());
+    }
+
+    #[test]
+    fn test_update_with_invalid_rate() {
+        let mut cache = ConversionCache::new();
+        let response = json!({
+            "timestamp": Utc::now().timestamp(),
+            "rates": {
+                "EUR": "invalid",
+                "USD": 1.2
+            }
+        });
+        assert!(cache.update(response).is_err());
+    }
+
+    #[test]
+    fn test_update_with_invalid_timestamp() {
+        let mut cache = ConversionCache::new();
+        let response = json!({
+            "timestamp": "invalid",
+            "rates": {
+                "EUR": 1.0,
+                "USD": 1.2
+            }
+        });
+        assert!(cache.update(response).is_ok());
+    }
+
+    #[test]
+    fn test_save_to_db_and_load_from_db() {
+        let mut cache = ConversionCache::new();
+        let response = json!({
+            "timestamp": Utc::now().timestamp(),
+            "rates": {
+                "EUR": 1.0,
+                "USD": 1.2
+            }
+        });
+        assert!(cache.update(response).is_ok());
+        assert!(cache.save_to_db().is_ok());
+
+        let loaded_cache = ConversionCache::load_from_db();
+        assert!(loaded_cache.is_ok());
+        assert_eq!(cache.cache, loaded_cache.unwrap().cache);
+    }
+
+    #[test]
+    fn test_api_error_display() {
+        let error = APIError {
+            message: "Test error".to_string(),
+        };
+        assert_eq!(format!("{}", error), "API error: Test error");
     }
 }
