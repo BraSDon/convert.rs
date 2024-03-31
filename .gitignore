@@ -1,1 +1,9 @@
 /target
+
+# IDE
+/.vscode
+/.idea
+
+# DB
+*.db
+*.sqlite
