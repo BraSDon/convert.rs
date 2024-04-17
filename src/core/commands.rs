@@ -37,7 +37,13 @@ impl Command {
                     output.push_str(&format!("{}\n", unit));
                 }
             }
-            Command::Help => output.push_str("HEEEEELP!"),
+            Command::Help => output.push_str(
+                "Commands:\n\
+                - <value> <unit> -> <unit>: Convert a value to another unit.\n\
+                - units: List all available units.\n\
+                - help: Show this help message.\n\
+                - exit: Exit the program.",
+            ),
             _ => {}
         };
 
