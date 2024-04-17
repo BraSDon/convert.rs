@@ -1,9 +1,9 @@
 mod core;
 mod ui;
-use crate::ui::cli::CLI;
+use crate::ui::cli::Cli;
 use crate::ui::ui::Interface;
 
 fn main() {
-    let cli = CLI::new();
+    let cli = Cli::new();
     cli.interact();
 }

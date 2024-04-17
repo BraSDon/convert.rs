@@ -4,11 +4,11 @@ use crate::ui::ui::Interface;
 use console::Term;
 use dialoguer::Input;
 
-pub struct CLI;
+pub struct Cli;
 
-impl Interface for CLI {
+impl Interface for Cli {
     fn new() -> Self {
-        CLI {}
+        Cli {}
     }
 
     fn interact(self) {
@@ -21,7 +21,7 @@ impl Interface for CLI {
 
             let command: Result<Command, _> = input.trim().parse();
             match command {
-                Ok(Command::EXIT) => break,
+                Ok(Command::Exit) => break,
                 Ok(command) => term.write_line(&command.execute()).unwrap(),
                 Err(e) => term.write_line(&e).unwrap(),
             }

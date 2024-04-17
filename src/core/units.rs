@@ -52,7 +52,7 @@ impl Value {
         let new_value = Unit::convert(self.value.unwrap(), &self.unit, to)?;
         Ok(Value {
             value: Some(new_value),
-            unit: to.clone(),
+            unit: (*to).clone(),
         })
     }
 }

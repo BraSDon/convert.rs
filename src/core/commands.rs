@@ -7,13 +7,13 @@ use crate::core::units::{Unit, Value};
 #[derive(Debug, PartialEq)]
 pub enum Command {
     /// Convert a value to another unit.
-    CONVERT(Value, Unit),
+    Convert(Value, Unit),
     /// List all available units.
-    UNITS,
+    Units,
     /// Show help.
-    HELP,
+    Help,
     /// Exit the program.
-    EXIT,
+    Exit,
 }
 
 impl Command {
@@ -23,21 +23,21 @@ impl Command {
         let mut output = String::new();
 
         match self {
-            Command::CONVERT(value, to_unit) => {
+            Command::Convert(value, to_unit) => {
                 let result = value.convert_to(to_unit);
                 match result {
                     Ok(v) => output.push_str(&v.to_string()),
                     Err(e) => output.push_str(&e.to_string()),
                 }
             }
-            Command::UNITS => {
+            Command::Units => {
                 output.push_str("Available units:\n");
                 let units = Unit::get_all_units();
                 for unit in units {
                     output.push_str(&format!("{}\n", unit));
                 }
             }
-            Command::HELP => output.push_str("HEEEEELP!"),
+            Command::Help => output.push_str("HEEEEELP!"),
             _ => {}
         };
 
@@ -61,11 +61,12 @@ impl Command {
                 let to_unit = caps[3].parse()?;
 
                 let v = Value::new(value, from_unit);
-                Ok(Command::CONVERT(v, to_unit))
+                Ok(Command::Convert(v, to_unit))
             }
-            None => Err(format!(
+            None => Err(
                 "Invalid input. Expression should be in the form <value> <unit> -> <unit>."
-            )),
+                    .to_string(),
+            ),
         }
     }
 }
@@ -78,9 +79,9 @@ impl FromStr for Command {
         let conversion_result = Command::try_parse_conversion(s);
 
         match s {
-            "units" => Ok(Command::UNITS),
-            "help" => Ok(Command::HELP),
-            "exit" => Ok(Command::EXIT),
+            "units" => Ok(Command::Units),
+            "help" => Ok(Command::Help),
+            "exit" => Ok(Command::Exit),
             _ => conversion_result,
         }
     }
@@ -98,7 +99,7 @@ mod tests {
         assert!(command.is_ok());
         assert_eq!(
             command.unwrap(),
-            Command::CONVERT(
+            Command::Convert(
                 Value::new(100.0, Unit::Length(LengthUnit::Meter)),
                 Unit::Length(LengthUnit::Kilometer)
             )
@@ -106,15 +107,15 @@ mod tests {
 
         let command = "units".parse::<Command>();
         assert!(command.is_ok());
-        assert_eq!(command.unwrap(), Command::UNITS);
+        assert_eq!(command.unwrap(), Command::Units);
 
         let command = "help".parse::<Command>();
         assert!(command.is_ok());
-        assert_eq!(command.unwrap(), Command::HELP);
+        assert_eq!(command.unwrap(), Command::Help);
 
         let command = "exit".parse::<Command>();
         assert!(command.is_ok());
-        assert_eq!(command.unwrap(), Command::EXIT);
+        assert_eq!(command.unwrap(), Command::Exit);
 
         let command = "invalid".parse::<Command>();
         assert!(command.is_err());

@@ -63,7 +63,7 @@ impl ConversionCache {
         let app_id = std::env::var("OPENEXCHANGERATES_APP_ID").map_err(|_| APIError {
             message: "API key not found".to_string(),
         })?;
-        let body = reqwest::blocking::get(&format!("{}?app_id={}", API_BASE_URL, app_id))?
+        let body = reqwest::blocking::get(format!("{}?app_id={}", API_BASE_URL, app_id))?
             .json::<serde_json::Value>()?;
         Ok(body)
     }
@@ -200,11 +200,10 @@ mod tests {
         }
 
         let average_duration = total_duration / repeat_count;
-        
+
         // implicitly check that subsequent calls do not require a new API request,
         // therefore should be faster than the first call.
         assert!(duration_fst > average_duration);
-        
     }
 
     #[test]
